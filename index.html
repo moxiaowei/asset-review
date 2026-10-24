@@ -471,6 +471,7 @@ function setSyncStatus(msg, ok) {
 function updateSyncIndicator(ok) {
   const el = document.getElementById('sync-indicator');
   if (!el) return;
+  if (STATIC_MODE) { el.innerHTML = '💾 <span style="color:#64748b;font-size:12px">静态版 · 数据保存于本机浏览器，请用「导出数据」备份</span>'; return; }
   const ts = localStorage.getItem(SYNC_TIME_KEY);
   if (ts) {
     const d = new Date(parseInt(ts));
