@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>💰 月度财务复盘</title>
+<script src="chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #059669; --primary-light: #34d399; --primary-dark: #047857;
+    --bg: #f0fdf4; --card: #ffffff; --text: #1e293b; --text-light: #64748b;
+    --border: #e2e8f0; --success: #22c55e; --danger: #ef4444; --warning: #f59e0b;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+    background: var(--bg); color: var(--text); padding: 0 0 80px 0;
+    min-height: 100vh;
+  }
+  .container { max-width: 640px; margin: 0 auto; padding: 12px; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #059669, #047857);
+    border-radius: 20px; padding: 24px 20px; color: white;
+    margin-bottom: 16px; box-shadow: 0 8px 32px rgba(5,150,105,0.2);
+  }
+  .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+  .header .sub { font-size: 13px; opacity: 0.85; }
+  .header .total-row {
+    display: flex; justify-content: space-between; align-items: end; margin-top: 16px;
+  }
+  .header .total-row .amount { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+  .header .total-row .change { font-size: 14px; font-weight: 500; }
+  .header .total-row .change.up { color: #a7f3d0; }
+  .header .total-row .change.down { color: #fca5a5; }
+
+  /* Summary cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--card); border-radius: var(--radius); padding: 14px 10px; text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stat-card .val { font-size: 18px; font-weight: 700; }
+  .stat-card .lbl { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+  .stat-card .val.green { color: var(--primary); }
+  .stat-card .val.red { color: var(--danger); }
+  .stat-card .val.blue { color: #3b82f6; }
+  .stat-card .val.purple { color: #8b5cf6; }
+  .stat-card .val.orange { color: #f59e0b; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+  .tab {
+    padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;
+    border: 1px solid var(--border); background: var(--card); cursor: pointer;
+    white-space: nowrap; transition: all 0.2s;
+  }
+  .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+  /* Card */
+  .card {
+    background: var(--card); border-radius: 16px; padding: 20px;
+    margin-bottom: 14px; border: 1px solid var(--border);
+  }
+  .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f1f5f9; color: var(--text-light); font-weight: 400; }
+
+  /* Month selector */
+  .month-picker {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 12px 0; margin-bottom: 4px;
+  }
+  .month-picker .btn {
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--card); cursor: pointer; font-size: 18px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .month-picker .btn:active { background: #f1f5f9; }
+  .month-picker .label { font-size: 18px; font-weight: 600; min-width: 120px; text-align: center; }
+
+  /* Carry-forward hint */
+  .carry-hint {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px;
+    padding: 10px 14px; margin: 2px 0 12px; font-size: 13px; color: #1e40af;
+  }
+  .carry-hint .hint-icon { font-size: 18px; }
+  .carry-hint .hint-actions { margin-left: auto; display: flex; gap: 8px; }
+  .carry-hint button {
+    border: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+  }
+  .carry-hint .btn-do { background: #2563eb; color: #fff; }
+  .carry-hint .btn-do:hover { background: #1d4ed8; }
+  .carry-hint .btn-skip { background: #e2e8f0; color: #475569; }
+  .carry-hint .btn-skip:hover { background: #cbd5e1; }
+  .carry-hint.dismissed { display: none; }
+
+  /* === Category Group === */
+  .cat-group { margin-bottom: 4px; }
+  .cat-group:last-child { margin-bottom: 0; }
+  .cat-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 0 8px; border-bottom: 2px solid #e2e8f0;
+    font-size: 14px; font-weight: 600;
+  }
+  .cat-header .cat-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .cat-header .cat-total {
+    margin-left: auto; font-size: 14px; font-weight: 700;
+  }
+
+  /* Account item inside category */
+  .cat-item {
+    display: flex; align-items: center; padding: 10px 0 10px 0;
+    border-bottom: 1px solid #f1f5f9; gap: 10px;
+  }
+  .cat-item:last-child { border-bottom: none; }
+  .cat-item .info { flex: 1; min-width: 0; }
+  .cat-item .info .name { font-size: 14px; font-weight: 500; }
+  .cat-item .amount-col { text-align: right; flex-shrink: 0; }
+  .cat-item .amount-col .amt { font-size: 14px; font-weight: 600; }
+  .cat-item .amount-col .mo-chg { font-size: 11px; }
+  .cat-item .amount-col .mo-chg.up { color: var(--success); }
+  .cat-item .amount-col .mo-chg.down { color: var(--danger); }
+  .cat-item .amount-col .pct { font-size: 11px; color: var(--text-light); margin-top: 1px; }
+  .cat-item .amount-col .pct .pct-num { color: var(--primary); font-weight: 700; }
+  .cat-header .cat-pct { font-size: 12px; color: var(--text-light); font-weight: 500; margin-left: 8px; }
+
+  /* Inline add form inside category group */
+  .inline-add-row {
+    display: flex; gap: 6px; padding: 8px 0 4px 0; align-items: center;
+  }
+  .inline-add-row input {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: inherit; background: #f8fafc;
+    outline: none; transition: border-color 0.2s;
+  }
+  .inline-add-row input:focus {
+    border-color: var(--primary); background: #fff;
+  }
+  .inline-add-row .ia-name { flex: 1; min-width: 0; }
+  .inline-add-row .ia-amount { flex: 0 0 100px; }
+  .inline-add-row .ia-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: none;
+    background: var(--primary); color: white; font-size: 18px; font-weight: 600;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .inline-add-row .ia-btn:active { background: var(--primary-dark); transform: scale(0.95); }
+
+  /* Account colors */
+  .ac-储蓄 { background: #dbeafe; }
+  .ac-活期 { background: #dbeafe; }
+  .ac-定期 { background: #bfdbfe; }
+  .ac-基金 { background: #dcfce7; }
+  .ac-股票 { background: #fef3c7; }
+  .ac-理财 { background: #ede9fe; }
+  .ac-出借 { background: #fff7ed; }
+  .ac-负债 { background: #fecaca; }
+  .ac-保险 { background: #fce7f3; }
+  .ac-房产 { background: #e0e7ff; }
+  .ac-债权 { background: #d1fae5; }
+  .ac-现金 { background: #f1f5f9; }
+  .ac-其他 { background: #f5f5f4; }
+
+  /* Input */
+  .input-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .input-row select, .input-row input {
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 14px; font-family: inherit; background: var(--card);
+  }
+  .input-row select { flex: 0 0 auto; }
+  .input-row input[type="text"] { flex: 1; min-width: 0; }
+  .input-row input[type="number"] { flex: 0 0 110px; }
+  .btn {
+    padding: 10px 20px; border: none; border-radius: 10px; font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn.primary { background: var(--primary); color: white; }
+  .btn.primary:hover { background: var(--primary-dark); }
+  .btn.danger { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
+  .btn.outline { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+
+  /* Chart container */
+  .chart-wrap { position: relative; height: 200px; margin: 8px 0; }
+  .chart-wrap.tall { height: 280px; }
+
+  /* Trend table */
+  .trend-row {
+    display: grid; grid-template-columns: 70px 1fr 80px 60px; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid #f1f5f9; align-items: center;
+    font-size: 13px;
+  }
+  .trend-row:first-child { font-weight: 600; color: var(--text-light); font-size: 12px; }
+  .trend-row .bar-wrap { height: 20px; background: #f1f5f9; border-radius: 10px; overflow: hidden; }
+  .trend-row .bar { height: 100%; border-radius: 10px; transition: width 0.5s; }
+
+  /* Rate input inline */
+  .rate-input {
+    width: 52px; padding: 3px 4px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px; text-align: center; font-family: inherit;
+    background: #f8fafc; outline: none;
+  }
+  .rate-input:focus { border-color: var(--primary); background: #fff; }
+  .rate-display {
+    font-size: 12px; color: var(--text-light); cursor: pointer;
+    padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+  }
+  .rate-display:hover { background: #f1f5f9; }
+  .earnings-pos { color: var(--success); }
+  .earnings-neg { color: var(--danger); }
+
+  /* Earnings summary card */
+  .earnings-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .earnings-item {
+    text-align: center; padding: 10px 6px;
+    border-radius: 10px; border: 1px solid var(--border);
+  }
+  .earnings-item .val { font-size: 16px; font-weight: 700; }
+  .earnings-item .lbl { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+
+  /* Delete icon */
+  .del-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+    background: #fef2f2; color: var(--danger); font-size: 12px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+
+  /* Section toggle */
+  .section { display: none; }
+  .section.show { display: block; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-light); }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  @media (max-width: 420px) {
+    .header { padding: 18px 16px; }
+    .header .total-row .amount { font-size: 26px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .stat-card { padding: 10px 6px; }
+    .stat-card .val { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>💰 财务复盘</h1>
+    <div class="sub">每月记录 · 清晰掌控</div>
+    <div class="total-row">
+      <div>
+        <div style="font-size:12px;opacity:0.8;">净资产</div>
+        <div class="amount" id="total-amount">¥0</div>
+      </div>
+      <div class="change" id="total-change"></div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="val green" id="s-invest">¥0</div><div class="lbl">投资类</div></div>
+    <div class="stat-card"><div class="val blue" id="s-save">¥0</div><div class="lbl">储蓄类</div></div>
+    <div class="stat-card"><div class="val red" id="s-debt">¥0</div><div class="lbl">负债</div></div>
+    <div class="stat-card"><div class="val purple" id="s-count">0</div><div class="lbl">账户数</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('record')">📝 记账</div>
+    <div class="tab" onclick="switchTab('chart')">📊 图表</div>
+    <div class="tab" onclick="switchTab('trend')">📈 趋势</div>
+    <div class="tab" onclick="switchTab('manage')">⚙️ 管理</div>
+    <div class="tab" onclick="switchTab('lend')">🤝 出借风险</div>
+  </div>
+
+  <!-- ===== Record Tab ===== -->
+  <div class="section show" id="sec-record">
+    <div class="month-picker">
+      <button class="btn" onclick="changeMonth(-1)">‹</button>
+      <span class="label" id="month-label"></span>
+      <button class="btn" onclick="changeMonth(1)">›</button>
+    </div>
+
+    <!-- Carry-forward hint (auto-sync last month snapshot) -->
+    <div id="carry-hint"></div>
+
+    <div id="account-list" class="card"></div>
+
+    <!-- Earnings Summary Card -->
+    <div id="earnings-card" class="card" style="display:none;">
+      <h3>📊 预估年化收益</h3>
+      <div class="earnings-grid">
+        <div class="earnings-item">
+          <div class="val green" id="e-total-annual">¥0</div>
+          <div class="lbl">📅 年度总收益</div>
+        </div>
+        <div class="earnings-item">
+          <div class="val green" id="e-total-monthly">¥0</div>
+          <div class="lbl">🗓️ 月均收益</div>
+        </div>
+        <div class="earnings-item">
+          <div class="val purple" id="e-wavg-rate">0%</div>
+          <div class="lbl">📈 加权平均收益率</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>➕ 其他分类 / 快捷添加</h3>
+      <div class="input-row">
+        <select id="ac-type" style="flex:0 0 80px;">
+          <option value="储蓄">🏦 储蓄</option><option value="活期">💳 活期</option>
+          <option value="定期">📀 定期</option><option value="基金">📈 基金</option>
+          <option value="股票">📊 股票</option><option value="理财">💰 理财</option>
+          <option value="出借">🤝 出借他人</option>
+          <option value="负债">💳 负债</option>
+          <option value="保险">🛡️ 保险</option><option value="房产">🏠 房产</option>
+          <option value="债权">🧾 债权</option><option value="现金">💵 现金</option>
+          <option value="其他">📦 其他</option>
+        </select>
+        <input type="text" id="ac-name" placeholder="名称 e.g. 招商银行" value="">
+        <input type="number" id="ac-amount" placeholder="金额" step="0.01" style="flex:0 0 90px;">
+        <input type="number" id="ac-rate" placeholder="年化%" step="0.1" min="0" max="100" style="flex:0 0 70px;">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary" onclick="addAccount()" style="flex:1;">✓ 添加</button>
+        <button class="btn outline" onclick="quickAdd()" style="flex:1;">⚡ 快捷模板</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Chart Tab ===== -->
+  <div class="section" id="sec-chart">
+    <div class="card">
+      <h3>🥧 资产配比</h3>
+      <div class="chart-wrap tall"><canvas id="pie-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>📊 分类对比</h3>
+      <div class="chart-wrap"><canvas id="bar-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ===== Trend Tab ===== -->
+  <div class="section" id="sec-trend">
+    <div class="card">
+      <h3>📈 净资产趋势</h3>
+      <div class="chart-wrap tall"><canvas id="line-chart"></canvas></div>
+    </div>
+    <div class="card" id="trend-table"></div>
+  </div>
+
+  <!-- ===== Manage Tab ===== -->
+  <div class="section" id="sec-manage">
+    <div class="card">
+      <h3>⚙️ 账户模板管理</h3>
+      <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">设置默认账户列表，添加新月份时自动载入。</p>
+      <div id="template-list"></div>
+      <div class="input-row" style="margin-top:12px;">
+        <select id="tmpl-type" style="flex:0 0 80px;">
+          <option value="储蓄">🏦 储蓄</option><option value="活期">💳 活期</option>
+          <option value="定期">📀 定期</option><option value="基金">📈 基金</option>
+          <option value="股票">📊 股票</option><option value="理财">💰 理财</option>
+          <option value="出借">🤝 出借他人</option>
+          <option value="负债">💳 负债</option>
+          <option value="保险">🛡️ 保险</option><option value="房产">🏠 房产</option>
+          <option value="债权">🧾 债权</option><option value="现金">💵 现金</option>
+          <option value="其他">📦 其他</option>
+        </select>
+        <input type="text" id="tmpl-name" placeholder="名称 e.g. 招商银行" style="flex:1;">
+        <button class="btn primary btn-sm" onclick="addTemplate()">添加</button>
+      </div>
+      <button class="btn outline" onclick="applyTemplate()" style="width:100%;margin-top:8px;">
+        📋 应用到当前月份
+      </button>
+    </div>
+    <div class="card">
+      <h3>🗄️ 数据管理</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+        <button class="btn outline btn-sm" onclick="exportData()">📤 导出数据</button>
+        <button class="btn outline btn-sm" onclick="document.getElementById('import-file').click()">📥 导入数据</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+        <button class="btn primary btn-sm" onclick="syncToServer()" id="sync-btn">☁️ 同步到服务器</button>
+        <button class="btn outline btn-sm" onclick="restoreFromServer()" id="restore-btn">🔄 从服务器恢复</button>
+        <button class="btn danger btn-sm" onclick="clearAll()">🗑️ 清空所有</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="sync-indicator" style="font-size:12px;"></span>
+        <span id="sync-status" style="font-size:11px;color:#64748b;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Lend Risk Tab ===== -->
+  <div class="section" id="sec-lend">
+    <div id="lend-board"></div>
+  </div>
+
+</div>
+
+<script>
+// ===== Data Store =====
+const STORAGE_KEY = 'finance_monthly';
+const TEMPLATE_KEY = 'finance_template';
+const DOMAIN_KEY = 'finance_domain';
+const SYNC_TIME_KEY = 'finance_last_sync';
+// 静态托管（GitHub Pages / Cloudflare Pages）时无后端，禁用服务器同步
+const STATIC_MODE = /(^|\.)github\.io$|(^|\.)pages\.dev$/.test(location.hostname);
+
+// ── Domain migration detection & auto-restore ──
+function checkDomainChange() {
+  const oldDomain = localStorage.getItem(DOMAIN_KEY);
+  const curDomain = window.location.hostname;
+  if (!oldDomain) {
+    localStorage.setItem(DOMAIN_KEY, curDomain);
+    return;
+  }
+  if (oldDomain !== curDomain) {
+    localStorage.setItem(DOMAIN_KEY, curDomain);
+    // localStorage on the new domain is empty — auto-restore from server
+    fetch('/api/finance/data')
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok && res.data && Object.keys(res.data).length > 0) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+          renderRecord();
+          showToast(`🔄 域名已变更，已自动从服务器恢复 ${Object.keys(res.data).length} 个月数据`, 'success');
+        } else {
+          showToast(`ℹ️ 域名已变更（${oldDomain} → ${curDomain}），服务器暂无可恢复数据，新数据将自动备份`, 'info');
+        }
+      })
+      .catch(() => {
+        showToast('⚠️ 域名已变更，但无法连接服务器恢复数据，请稍后重试', 'warning');
+      });
+  }
+}
+
+function showToast(msg, type) {
+  const colors = {success:'#22c55e', warning:'#f59e0b', info:'#3b82f6', danger:'#ef4444'};
+  const toast = document.createElement('div');
+  toast.textContent = msg;
+  toast.style.cssText = `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:${colors[type]||'#22c55e'};color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:90%;text-align:center;line-height:1.5`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+function loadData() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+function saveData(d) { 
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+  // Also backup to server
+  syncToServerSilent(d);
+}
+
+let syncTimer = null;
+function setSyncStatus(msg, ok) {
+  const el = document.getElementById('sync-status');
+  if (el) el.innerHTML = msg;
+}
+function updateSyncIndicator(ok) {
+  const el = document.getElementById('sync-indicator');
+  if (!el) return;
+  const ts = localStorage.getItem(SYNC_TIME_KEY);
+  if (ts) {
+    const d = new Date(parseInt(ts));
+    const timeStr = d.toLocaleTimeString();
+    el.innerHTML = ok
+      ? `✅ <span style="color:#22c55e">已同步</span> <span style="color:#94a3b8;font-size:11px">${timeStr}</span>`
+      : `⏳ <span style="color:#f59e0b">同步中...</span>`;
+  } else {
+    el.innerHTML = `⚪ <span style="color:#94a3b8">未同步</span>`;
+  }
+}
+function syncToServerSilent(d) {
+  const data = d || loadData();
+  fetch('/api/finance/data', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  }).then(r => r.json()).then(res => {
+    if (res.ok) {
+      localStorage.setItem(SYNC_TIME_KEY, Date.now());
+      updateSyncIndicator(true);
+    }
+  }).catch(() => {});
+}
+function syncToServer() {
+  const btn = document.getElementById('sync-btn');
+  btn.textContent = '⏳ 同步中...';
+  btn.disabled = true;
+  const data = loadData();
+  fetch('/api/finance/data', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  }).then(r => r.json()).then(res => {
+    if (res.ok) {
+      localStorage.setItem(SYNC_TIME_KEY, Date.now());
+      updateSyncIndicator(true);
+      btn.textContent = '☁️ 同步完成 ✅';
+      setSyncStatus('✅ ' + new Date().toLocaleTimeString() + ' 同步成功！' + Object.keys(data).length + '个月数据已备份');
+    } else {
+      btn.textContent = '☁️ 同步失败 ❌';
+      setSyncStatus('❌ 同步失败：' + (res.error||'未知错误'));
+    }
+  }).catch(e => {
+    btn.textContent = '☁️ 同步失败 ❌';
+    setSyncStatus('❌ 网络错误：' + e.message);
+  }).finally(() => {
+    setTimeout(() => { btn.textContent = '☁️ 同步到服务器'; btn.disabled = false; }, 3000);
+  });
+}
+function restoreFromServer() {
+  if (!confirm('从服务器恢复将覆盖当前所有未保存的数据，确认继续？')) return;
+  fetch('/api/finance/data')
+    .then(r => r.json())
+    .then(res => {
+      if (res.ok && res.data && Object.keys(res.data).length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+        renderRecord();
+        showToast('✅ 已从服务器恢复 ' + Object.keys(res.data).length + ' 个月数据', 'success');
+      } else {
+        showToast('⚠️ 服务器上没有备份数据', 'warning');
+      }
+    })
+    .catch(e => {
+      showToast('❌ 恢复失败：' + e.message, 'danger');
+    });
+}
+
+// Periodic auto-backup: every 30 seconds while page is open
+function startAutoBackup() {
+  setInterval(() => {
+    const d = loadData();
+    if (Object.keys(d).length > 0) {
+      syncToServerSilent(d);
+    }
+  }, 30000);
+}
+
+function loadTemplate() {
+  try { return JSON.parse(localStorage.getItem(TEMPLATE_KEY)) || []; } catch { return []; }
+}
+function saveTemplate(t) { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(t)); }
+
+let currentMonth = '';
+let chartInstances = {};
+
+function getTodayMonth() {
+  const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function getMonthLabel(m) {
+  const [y, mo] = m.split('-');
+  const names = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  return `${y}年 ${names[parseInt(mo)-1]}`;
+}
+
+// ===== Navigation =====
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('show'));
+  document.querySelector(`.tab[onclick*="'${tab}'"]`).classList.add('active');
+  document.getElementById(`sec-${tab}`).classList.add('show');
+  if (tab === 'chart') setTimeout(renderCharts, 100);
+  if (tab === 'trend') setTimeout(renderTrend, 100);
+  if (tab === 'manage') renderTemplate();
+  if (tab === 'lend') setTimeout(renderLendBoard, 100);
+}
+
+function changeMonth(delta) {
+  const [y, m] = currentMonth.split('-').map(Number);
+  const d = new Date(y, m-1 + delta, 1);
+  currentMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderRecord();
+}
+
+// ===== Type helpers =====
+const CATEGORY_ORDER = ['储蓄','活期','定期','基金','股票','理财','出借','负债','保险','房产','债权','现金','其他'];
+
+function getTypeIcon(t) {
+  const icons = {'储蓄':'🏦','活期':'💳','定期':'📀','基金':'📈','股票':'📊','理财':'💰','出借':'🤝','负债':'💳','保险':'🛡️','房产':'🏠','债权':'🧾','现金':'💵','其他':'📦'};
+  return icons[t] || '📦';
+}
+function getTypeLabel(t) {
+  const labels = {'储蓄':'银行储蓄','活期':'活期存款','定期':'定期存款','基金':'基金投资','股票':'股票投资','理财':'理财产品','出借':'出借他人','负债':'负债账户','保险':'保险保障','房产':'房产投资','债权':'债权投资','现金':'现金持有','其他':'其他资产'};
+  return labels[t] || t;
+}
+
+function isLiability(type) { return type === '负债'; }
+
+function getNetAmount(ac) {
+  const amt = parseFloat(ac.amount) || 0;
+  return isLiability(ac.type) ? -amt : amt;
+}
+
+// ===== Carry-forward: sync last month's snapshot as this month's starting point =====
+const carryDismissed = {}; // session-level "skip" per month
+function genAcctId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function monthHasRealData(list) { return Array.isArray(list) && list.some(a => (parseFloat(a.amount)||0) !== 0); }
+function monthIsEmptyOrZero(list) {
+  return !Array.isArray(list) || list.length === 0 ||
+    (list.length > 0 && list.every(a => !(parseFloat(a.amount)||0)));
+}
+function maxMonthKey(data) {
+  const keys = Object.keys(data).filter(k => /^\d{4}-\d{2}$/.test(k));
+  return keys.length ? keys.sort().pop() : null;
+}
+// Closest previous month that actually holds real (non-zero) data
+function findPrevSourceMonth(data, month) {
+  const keys = Object.keys(data).filter(k => k < month && monthHasRealData(data[k])).sort();
+  return keys.length ? keys[keys.length - 1] : null;
+}
+function doCarryForward(srcMonth, targetMonth) {
+  const data = loadData();
+  const src = data[srcMonth];
+  if (!Array.isArray(src) || src.length === 0) return false;
+
+  // Target month is empty or only zero-placeholder rows (callers guarantee this),
+  // so replace it entirely with a deep copy of last month's snapshot.
+  // New ids so edits (delete/rate) never touch the source month's rows.
+  data[targetMonth] = src.map(a => ({
+    id: genAcctId(),
+    type: a.type, name: a.name,
+    amount: parseFloat(a.amount) || 0,
+    rate: parseFloat(a.rate) || 0
+  }));
+  saveData(data);
+  return true;
+}
+function maybeAutoCarryForward() {
+  const hintEl = document.getElementById('carry-hint');
+  const data = loadData();
+  const cur = data[currentMonth];
+
+  // Month already has real amounts → do nothing
+  if (monthHasRealData(cur)) { if (hintEl) hintEl.innerHTML = ''; return; }
+
+  const src = findPrevSourceMonth(data, currentMonth);
+  if (!src) { if (hintEl) hintEl.innerHTML = ''; return; }
+
+  const maxK = maxMonthKey(data);
+
+  // Current (or brand-new / latest) month with only empty/zero placeholder rows
+  // → automatically carry last month's snapshot over so user edits from there.
+  if (maxK === null || currentMonth >= maxK) {
+    const n = (data[src] || []).length;
+    if (doCarryForward(src, currentMonth)) {
+      if (hintEl) hintEl.innerHTML = '';
+      showToast(`🔄 已自动从 ${getMonthLabel(src)} 结转 ${n} 项资产到 ${getMonthLabel(currentMonth)}，请在原数据基础上修改`, 'success');
+    }
+    return;
+  }
+
+  // Historical empty month (viewing backwards) → offer manual carry, never auto-write
+  if (carryDismissed[currentMonth]) { if (hintEl) hintEl.innerHTML = ''; return; }
+  if (hintEl) {
+    const n = (data[src] || []).length;
+    hintEl.innerHTML = `
+      <div class="carry-hint">
+        <span class="hint-icon">📋</span>
+        <span><b>${getMonthLabel(currentMonth)}</b> 暂无记录。是否从 <b>${getMonthLabel(src)}</b>（${n} 项）结转一份作为起点修改？</span>
+        <span class="hint-actions">
+          <button class="btn-do" onclick="confirmCarryForward()">📋 结转数据</button>
+          <button class="btn-skip" onclick="dismissCarry()">暂时跳过</button>
+        </span>
+      </div>`;
+  }
+}
+function confirmCarryForward() {
+  const data = loadData();
+  const src = findPrevSourceMonth(data, currentMonth);
+  if (src && doCarryForward(src, currentMonth)) {
+    renderRecord();
+    showToast(`✅ 已从 ${getMonthLabel(src)} 结转数据到 ${getMonthLabel(currentMonth)}，可在原数据基础上修改`, 'success');
+  } else {
+    showToast('ℹ️ 没有可结转的上月数据', 'info');
+  }
+}
+function dismissCarry() {
+  carryDismissed[currentMonth] = true;
+  const el = document.getElementById('carry-hint');
+  if (el) el.innerHTML = '';
+}
+
+// ===== Render Record (grouped by category with inline add) =====
+function renderRecord() {
+  if (!currentMonth) currentMonth = getTodayMonth();
+  document.getElementById('month-label').textContent = getMonthLabel(currentMonth);
+
+  // Carry-forward check may auto-create data for a fresh month
+  maybeAutoCarryForward();
+
+  const data = loadData();
+  const accounts = data[currentMonth] || [];
+
+  // Net total (assets - liabilities)
+  const netTotal = accounts.reduce((s, a) => s + getNetAmount(a), 0);
+  document.getElementById('total-amount').textContent = '¥' + netTotal.toLocaleString('zh-CN', {minimumFractionDigits:0, maximumFractionDigits:0});
+
+  // Month change
+  const prevMonth = getPrevMonth(currentMonth);
+  const prevAccounts = data[prevMonth] || [];
+  const prevNetTotal = prevAccounts.reduce((s, a) => s + getNetAmount(a), 0);
+  const chg = netTotal - prevNetTotal;
+  const el = document.getElementById('total-change');
+  if (prevAccounts.length > 0) {
+    const pct = prevNetTotal !== 0 ? (chg / Math.abs(prevNetTotal) * 100) : 0;
+    el.textContent = (chg >= 0 ? '↑' : '↓') + ' ' + Math.abs(chg).toLocaleString() + ' (' + (chg >= 0 ? '+' : '') + pct.toFixed(1) + '%)';
+    el.className = 'change ' + (chg >= 0 ? 'up' : 'down');
+  } else {
+    el.textContent = '';
+  }
+
+  // Summary stats
+  const investTypes = ['基金','股票','理财'];
+  const saveTypes = ['储蓄','活期','定期'];
+  const investTotal = accounts.filter(a => investTypes.includes(a.type)).reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
+  const saveTotal = accounts.filter(a => saveTypes.includes(a.type)).reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
+  const debtTotal = accounts.filter(a => isLiability(a.type)).reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
+  document.getElementById('s-invest').textContent = '¥' + investTotal.toLocaleString();
+  document.getElementById('s-save').textContent = '¥' + saveTotal.toLocaleString();
+  document.getElementById('s-debt').textContent = '¥' + debtTotal.toLocaleString();
+  document.getElementById('s-count').textContent = accounts.length;
+
+  // Totals used for percentage (占比) calculation
+  const assetTotal = accounts.filter(a => !isLiability(a.type)).reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
+  const liabTotal = accounts.filter(a => isLiability(a.type)).reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
+
+  // Group accounts by type
+  const grouped = {};
+  accounts.forEach(ac => {
+    if (!grouped[ac.type]) grouped[ac.type] = [];
+    grouped[ac.type].push(ac);
+  });
+
+  // Sort categories by predefined order, then alphabetically for unknown ones
+  const known = CATEGORY_ORDER.filter(t => grouped[t]);
+  const unknown = Object.keys(grouped).filter(t => !CATEGORY_ORDER.includes(t)).sort();
+  const sortedTypes = known.concat(unknown);
+
+  // Build HTML
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">📋 账户明细</h3>
+      <span style="font-size:13px;color:var(--text-light);">${accounts.length} 个账户</span>
+    </div>
+  `;
+
+  if (accounts.length === 0) {
+    html += `<div class="empty-state"><div class="icon">📭</div><p>本月暂无记录<br>从下方添加或使用快捷模板开始</p></div>`;
+  } else {
+    sortedTypes.forEach(type => {
+      const items = grouped[type];
+      const typeTotal = items.reduce((s, a) => s + (parseFloat(a.amount)||0), 0);
+      const isLiab = isLiability(type);
+      const catBase = isLiab ? liabTotal : assetTotal;
+      const catPct = catBase > 0 ? (typeTotal / catBase * 100) : 0;
+
+      html += `<div class="cat-group">`;
+
+      // Category header
+      html += `<div class="cat-header">
+        <div class="cat-icon ac-${type}">${getTypeIcon(type)}</div>
+        <span>${getTypeLabel(type)}</span>
+        <span class="cat-pct">占${isLiab ? '负债' : '总资产'} ${catPct.toFixed(1)}%</span>
+        <span class="cat-total" style="color:${isLiab ? 'var(--danger)' : 'var(--text)'}">
+          ${isLiab ? '-' : ''}¥${typeTotal.toLocaleString()}
+        </span>
+      </div>`;
+
+      // Items in this category
+      items.forEach(ac => {
+        const amt = parseFloat(ac.amount) || 0;
+        const displayAmt = isLiab ? -amt : amt;
+        const rate = parseFloat(ac.rate) || 0;
+        const annualEarning = amt * rate / 100;
+        const monthlyEarning = annualEarning / 12;
+        const base = isLiab ? liabTotal : assetTotal;
+        const pct = base > 0 ? (amt / base * 100) : 0;
+
+        // Month-over-month change
+        const prevAc = prevAccounts.find(p => p.name === ac.name && p.type === ac.type);
+        const moChg = prevAc ? (amt - (parseFloat(prevAc.amount)||0)) : 0;
+        const chgStr = moChg !== 0 ? `<div class="mo-chg ${moChg > 0 ? 'up' : 'down'}">${moChg > 0 ? '+' : ''}${moChg.toLocaleString()}</div>` : '';
+
+        const earnStr = rate > 0
+          ? `<div style="font-size:11px;color:var(--text-light);margin-top:2px;">
+               <span class="earnings-pos">+¥${annualEarning.toLocaleString('zh-CN',{maximumFractionDigits:0})}/年</span>
+               <span style="color:#94a3b8"> · </span>
+               <span class="earnings-pos">¥${monthlyEarning.toLocaleString('zh-CN',{maximumFractionDigits:0})}/月</span>
+             </div>`
+          : '';
+
+        html += `
+          <div class="cat-item">
+            <div class="info">
+              <div class="name">${ac.name || type}</div>
+              <div>
+                <span class="rate-display" id="rate-show-${ac.id}" onclick="editRate('${ac.id}')">📈 ${rate > 0 ? rate + '%' : '设置收益率'}</span>
+                ${earnStr}
+              </div>
+            </div>
+            <div class="amount-col">
+              <div class="amt" style="color:${isLiab ? 'var(--danger)' : ''}">${isLiab ? '-' : ''}¥${amt.toLocaleString()}</div>
+              <div class="pct">占${isLiab ? '负债' : '总资产'} <span class="pct-num">${pct.toFixed(1)}%</span></div>
+              ${chgStr}
+            </div>
+            <button class="del-btn" onclick="deleteAccount('${ac.id}')">✕</button>
+          </div>
+        `;
+      });
+
+      // Inline add form for this category
+      const nameId = `ia-name-${type}`;
+      const amtId = `ia-amt-${type}`;
+      html += `
+        <div class="inline-add-row">
+          <input type="text" class="ia-name" id="${nameId}" placeholder="输入细项名称 e.g. 招商银行" value="">
+          <input type="number" class="ia-amount" id="${amtId}" placeholder="金额" step="0.01">
+          <button class="ia-btn" onclick="addInlineAccount('${type}')" title="添加细项">+</button>
+        </div>
+      `;
+
+      html += `</div>`; // cat-group end
+    });
+  }
+
+  document.getElementById('account-list').innerHTML = html;
+
+  // ── Render earnings summary ──
+  renderEarningsSummary(accounts);
+}
+
+// ===== Earnings Summary =====
+function renderEarningsSummary(accounts) {
+  const card = document.getElementById('earnings-card');
+  if (!card) return;
+
+  const hasRate = accounts.some(a => parseFloat(a.rate) > 0);
+  if (accounts.length === 0 || !hasRate) {
+    card.style.display = 'none';
+    return;
+  }
+
+  let totalAnnual = 0, totalAmount = 0, weightedSum = 0;
+  accounts.forEach(ac => {
+    const amt = parseFloat(ac.amount) || 0;
+    const rate = parseFloat(ac.rate) || 0;
+    if (isLiability(ac.type)) return; // skip liabilities
+    if (rate > 0 && amt > 0) {
+      const annual = amt * rate / 100;
+      totalAnnual += annual;
+      totalAmount += amt;
+      weightedSum += annual;
+    }
+  });
+
+  const totalMonthly = totalAnnual / 12;
+  const wavgRate = totalAmount > 0 ? (weightedSum / totalAmount) * 100 : 0;
+
+  document.getElementById('e-total-annual').textContent = '¥' + totalAnnual.toLocaleString('zh-CN', {maximumFractionDigits:0});
+  document.getElementById('e-total-monthly').textContent = '¥' + totalMonthly.toLocaleString('zh-CN', {maximumFractionDigits:0});
+  document.getElementById('e-wavg-rate').textContent = wavgRate.toFixed(2) + '%';
+
+  card.style.display = 'block';
+}
+
+// ===== 出借风险看板 =====
+function renderLendBoard() {
+  const el = document.getElementById('lend-board');
+  if (!el) return;
+  const data = loadData();
+  if (!currentMonth) currentMonth = getTodayMonth();
+  const accounts = data[currentMonth] || [];
+  const assetTotal = accounts.filter(a => !isLiability(a.type)).reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+  const lendItems = accounts.filter(a => a.type === '出借');
+  const lendTotal = lendItems.reduce((s,a)=>s+(parseFloat(a.amount)||0),0);
+
+  if (lendItems.length === 0) {
+    el.innerHTML = `<div class="card"><div class="empty-state"><div class="icon">🤝</div><p>本月暂无「出借」记录<br>在记账页添加「出借他人」即可统计</p></div></div>`;
+    return;
+  }
+  const sorted = [...lendItems].sort((a,b)=>(parseFloat(b.amount)||0)-(parseFloat(a.amount)||0));
+  const totalAnnual = lendItems.reduce((s,a)=>s+((parseFloat(a.amount)||0)*(parseFloat(a.rate)||0)/100),0);
+  const lendPct = assetTotal>0 ? (lendTotal/assetTotal*100) : 0;
+  function badge(p){
+    if(p>=15) return {t:'🔴 高危集中',c:'#ef4444',bg:'#fef2f2'};
+    if(p>=10) return {t:'🟠 偏高',c:'#f59e0b',bg:'#fffbeb'};
+    if(p>=5)  return {t:'🟡 关注',c:'#d97706',bg:'#fefce8'};
+    return {t:'🟢 合理',c:'#22c55e',bg:'#f0fdf4'};
+  }
+  let html = '';
+  html += `<div class="card">
+    <h3>🤝 出借风险看板 <span class="badge">${getMonthLabel(currentMonth)}</span></h3>
+    <div class="earnings-grid" style="grid-template-columns:repeat(2,1fr);">
+      <div class="earnings-item"><div class="val" style="color:#8b5cf6">¥${lendTotal.toLocaleString()}</div><div class="lbl">出借总额</div></div>
+      <div class="earnings-item"><div class="val" style="color:${lendPct>=30?'#ef4444':lendPct>=15?'#f59e0b':'#059669'}">${lendPct.toFixed(1)}%</div><div class="lbl">占总资产</div></div>
+      <div class="earnings-item"><div class="val">${lendItems.length}</div><div class="lbl">借款人数</div></div>
+      <div class="earnings-item"><div class="val green">¥${totalAnnual.toLocaleString('zh-CN',{maximumFractionDigits:0})}</div><div class="lbl">年化利息合计</div></div>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--text-light);line-height:1.7;padding:10px 12px;background:#f8fafc;border-radius:10px;">
+      📏 <b>风控参考线</b>：单一无担保借款人敞口建议 <b>&lt; 净资产的 10%</b>；出借总额建议 <b>&lt; 总资产的 30%</b>。超标自动标色预警。
+    </div>
+  </div>`;
+  if (lendPct >= 30) {
+    html += `<div class="card" style="border-left:4px solid #ef4444;background:#fef2f2;">
+      <div style="font-size:13px;color:#b91c1c;font-weight:600;line-height:1.7;">⚠️ 出借总额占总资产 <b>${lendPct.toFixed(1)}%</b>，已超过 30% 警戒线——资产过度集中于「借条」这类非流动、有违约风险的形式。建议控制新增出借、逐步收回本金。</div>
+    </div>`;
+  }
+  html += `<div class="card"><h3>按借款人敞口 <span class="badge">从高到低</span></h3>`;
+  sorted.forEach(a=>{
+    const amt = parseFloat(a.amount)||0;
+    const rate = parseFloat(a.rate)||0;
+    const pctOfAssets = assetTotal>0 ? amt/assetTotal*100 : 0;
+    const pctOfLend = lendTotal>0 ? amt/lendTotal*100 : 0;
+    const annual = amt*rate/100;
+    const b = badge(pctOfAssets);
+    const barW = Math.min(100, pctOfAssets/30*100);
+    html += `<div style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:15px;font-weight:600;">${a.name||'未命名'}</span>
+        <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${b.bg};color:${b.c};font-weight:600;">${b.t}</span>
+        <span style="margin-left:auto;font-size:15px;font-weight:700;">¥${amt.toLocaleString()}</span>
+      </div>
+      <div style="height:8px;background:#f1f5f9;border-radius:6px;margin:8px 0 6px;overflow:hidden;">
+        <div style="height:100%;width:${barW}%;background:${b.c};border-radius:6px;transition:width .4s;"></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-light);">
+        <span>占总资产 <b style="color:${b.c}">${pctOfAssets.toFixed(1)}%</b></span>
+        <span>占出借 <b>${pctOfLend.toFixed(0)}%</b></span>
+        <span>年利率 <b>${rate}%</b></span>
+        <span>年息 <b style="color:#059669">¥${annual.toLocaleString('zh-CN',{maximumFractionDigits:0})}</b></span>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+// ===== Rate Editing =====
+function editRate(id) {
+  const data = loadData();
+  let ac = null, monthKey = null;
+  for (const m of Object.keys(data)) {
+    const found = data[m].find(a => a.id === id);
+    if (found) { ac = found; monthKey = m; break; }
+  }
+  if (!ac) return;
+
+  // Replace the rate display with an inline input
+  const el = document.getElementById('rate-show-' + id);
+  if (!el) return;
+  const currentRate = parseFloat(ac.rate) || 0;
+  el.outerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;">
+    <input type="number" class="rate-input" id="rate-edit-${id}" value="${currentRate}" step="0.1" min="0" max="100" placeholder="%">
+    <span style="font-size:12px;color:#64748b;">%</span>
+    <span style="font-size:11px;color:#3b82f6;cursor:pointer;padding:2px 6px;border-radius:4px;background:#eff6ff;" onclick="saveRate('${id}')">✓</span>
+    <span style="font-size:11px;color:#94a3b8;cursor:pointer;padding:2px 6px;border-radius:4px;" onclick="cancelRateEdit('${id}', ${currentRate})">✕</span>
+  </span>`;
+  const input = document.getElementById('rate-edit-' + id);
+  if (input) { input.focus(); input.select(); }
+}
+
+function saveRate(id) {
+  const input = document.getElementById('rate-edit-' + id);
+  if (!input) return;
+  const rate = parseFloat(input.value);
+  if (isNaN(rate) || rate < 0) { alert('请输入有效的收益率（0-100）'); return; }
+
+  const data = loadData();
+  for (const m of Object.keys(data)) {
+    const ac = data[m].find(a => a.id === id);
+    if (ac) { ac.rate = rate; break; }
+  }
+  saveData(data);
+  renderRecord();
+}
+
+function cancelRateEdit(id, oldRate) {
+  const el = document.getElementById('rate-show-' + id);
+  if (el) {
+    el.innerHTML = `📈 ${oldRate > 0 ? oldRate + '%' : '设置收益率'}`;
+  }
+}
+
+// ===== Add account inline (per category) =====
+function addInlineAccount(type) {
+  const nameInput = document.getElementById(`ia-name-${type}`);
+  const amtInput = document.getElementById(`ia-amt-${type}`);
+  const name = nameInput.value.trim() || type;
+  const amount = parseFloat(amtInput.value);
+  if (isNaN(amount)) { alert('请输入有效金额'); return; }
+
+  const data = loadData();
+  if (!data[currentMonth]) data[currentMonth] = [];
+  data[currentMonth].push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    type, name, amount
+  });
+  saveData(data);
+
+  // Clear inputs
+  nameInput.value = '';
+  amtInput.value = '';
+  renderRecord();
+}
+
+// ===== Add account via dropdown =====
+function addAccount() {
+  const type = document.getElementById('ac-type').value;
+  const name = document.getElementById('ac-name').value.trim() || type;
+  const amount = parseFloat(document.getElementById('ac-amount').value);
+  const rate = parseFloat(document.getElementById('ac-rate').value) || 0;
+  if (isNaN(amount)) { alert('请输入有效金额'); return; }
+
+  const data = loadData();
+  if (!data[currentMonth]) data[currentMonth] = [];
+  data[currentMonth].push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    type, name, amount, rate
+  });
+  saveData(data);
+  renderRecord();
+
+  document.getElementById('ac-name').value = '';
+  document.getElementById('ac-amount').value = '';
+  document.getElementById('ac-rate').value = '';
+}
+
+function deleteAccount(id) {
+  const data = loadData();
+  if (!data[currentMonth]) return;
+  data[currentMonth] = data[currentMonth].filter(a => a.id !== id);
+  saveData(data);
+  renderRecord();
+}
+
+function quickAdd() {
+  const template = loadTemplate();
+  if (template.length === 0) {
+    const defaults = [
+      {type:'活期', name:'活期存款'}, {type:'定期', name:'定期存款'},
+      {type:'基金', name:'基金账户'}, {type:'股票', name:'股票账户'},
+      {type:'理财', name:'理财产品'}, {type:'储蓄', name:'银行储蓄'},
+    ];
+    const data = loadData();
+    if (!data[currentMonth]) data[currentMonth] = [];
+    defaults.forEach(t => {
+      data[currentMonth].push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+        type: t.type, name: t.name, amount: 0, rate: 0
+      });
+    });
+    saveData(data);
+  } else {
+    applyTemplate();
+  }
+  renderRecord();
+}
+
+function getPrevMonth(m) {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(y, mo-2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+// ===== Charts =====
+function renderCharts() {
+  if (!currentMonth) currentMonth = getTodayMonth();
+  const data = loadData();
+  const accounts = data[currentMonth] || [];
+
+  // Pie chart - by type (exclude 负债 from assets view)
+  const byType = {};
+  accounts.forEach(a => {
+    const label = getTypeLabel(a.type);
+    const amt = Math.abs(getNetAmount(a));
+    if (amt > 0) {
+      byType[label] = (byType[label] || 0) + amt;
+    }
+  });
+
+  const colors = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16','#a1a1aa'];
+
+  destroyChart('pie');
+  const pieCtx = document.getElementById('pie-chart').getContext('2d');
+  if (Object.keys(byType).length === 0) {
+    return;
+  }
+  chartInstances.pie = new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(byType),
+      datasets: [{
+        data: Object.values(byType),
+        backgroundColor: colors.slice(0, Object.keys(byType).length),
+        borderWidth: 2,
+        borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 12, font: {size:12} } },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+              const pct = (ctx.parsed/total*100).toFixed(1);
+              return '¥' + ctx.parsed.toLocaleString() + ' (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Bar chart - compare invest vs save vs debt
+  destroyChart('bar');
+  const barCtx = document.getElementById('bar-chart').getContext('2d');
+  const investTypesArr = ['基金','股票','理财'];
+  const saveTypesArr = ['储蓄','活期','定期'];
+  const invAmt = accounts.filter(a => investTypesArr.includes(a.type)).reduce((s,a) => s+(parseFloat(a.amount)||0),0);
+  const savAmt = accounts.filter(a => saveTypesArr.includes(a.type)).reduce((s,a) => s+(parseFloat(a.amount)||0),0);
+  const debtAmt = accounts.filter(a => isLiability(a.type)).reduce((s,a) => s+(parseFloat(a.amount)||0),0);
+  const otherAmt = accounts.filter(a => !investTypesArr.includes(a.type) && !saveTypesArr.includes(a.type) && !isLiability(a.type)).reduce((s,a) => s+(parseFloat(a.amount)||0),0);
+
+  chartInstances.bar = new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels: ['投资类', '储蓄类', '负债', '其他'],
+      datasets: [{
+        label: '金额 (¥)',
+        data: [invAmt, savAmt, debtAmt, otherAmt],
+        backgroundColor: ['#f59e0b', '#3b82f6', '#ef4444', '#a1a1aa'],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' }
+        }
+      }
+    }
+  });
+}
+
+function destroyChart(name) {
+  if (chartInstances[name]) { chartInstances[name].destroy(); delete chartInstances[name]; }
+}
+
+// ===== Trend =====
+function renderTrend() {
+  const data = loadData();
+  const months = Object.keys(data).sort();
+
+  if (months.length === 0) {
+    document.getElementById('trend-table').innerHTML = '<div class="empty-state"><div class="icon">📈</div><p>暂无数据，开始记账后查看趋势</p></div>';
+    return;
+  }
+
+  // Line chart - net asset trend
+  destroyChart('line');
+  const lineCtx = document.getElementById('line-chart').getContext('2d');
+  const netTotals = months.map(m => (data[m]||[]).reduce((s,a) => s + getNetAmount(a), 0));
+  const maxVal = Math.max(...netTotals.map(Math.abs), 1);
+
+  chartInstances.line = new Chart(lineCtx, {
+    type: 'line',
+    data: {
+      labels: months.map(m => getMonthLabel(m).replace('年 ','/')),
+      datasets: [{
+        label: '净资产',
+        data: netTotals,
+        borderColor: '#059669',
+        backgroundColor: 'rgba(5,150,105,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: '#059669'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => '¥' + ctx.parsed.y.toLocaleString()
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: v => '¥' + (v/10000).toFixed(0) + '万' }
+        }
+      }
+    }
+  });
+
+  // Table
+  let html = '<h3>📋 月度明细</h3>';
+  html += '<div class="trend-row"><span>月份</span><span>净资产</span><span>变化</span><span>趋势</span></div>';
+
+  months.forEach((m, i) => {
+    const t = netTotals[i];
+    const prev = i > 0 ? netTotals[i-1] : t;
+    const chg = t - prev;
+    const barWidth = Math.min(100, (Math.abs(t) / maxVal) * 100);
+    const barColor = chg >= 0 ? '#22c55e' : '#ef4444';
+
+    html += `
+      <div class="trend-row">
+        <span style="font-size:12px;">${getMonthLabel(m).replace('年 ','/')}</span>
+        <div class="bar-wrap"><div class="bar" style="width:${barWidth}%;background:${barColor};"></div></div>
+        <span style="text-align:right;">¥${t.toLocaleString()}</span>
+        <span style="text-align:right;font-size:12px;color:${chg>=0?'var(--success)':'var(--danger)'};">${chg>=0?'+':''}${chg.toLocaleString()}</span>
+      </div>
+    `;
+  });
+  document.getElementById('trend-table').innerHTML = html;
+}
+
+// ===== Template Management =====
+function renderTemplate() {
+  const tmpl = loadTemplate();
+  const list = document.getElementById('template-list');
+
+  if (tmpl.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--text-light);padding:8px 0;">暂无模板，添加后可在新月份快速填充</div>';
+    return;
+  }
+
+  let html = '';
+  tmpl.forEach((t, i) => {
+    html += `
+      <div class="cat-item">
+        <div class="icon ac-${t.type}" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">${getTypeIcon(t.type)}</div>
+        <div class="info"><div class="name">${t.name}</div></div>
+        <button class="del-btn" onclick="removeTemplate(${i})">✕</button>
+      </div>
+    `;
+  });
+  list.innerHTML = html;
+}
+
+function addTemplate() {
+  const type = document.getElementById('tmpl-type').value;
+  const name = document.getElementById('tmpl-name').value.trim() || type;
+  const tmpl = loadTemplate();
+  tmpl.push({type, name});
+  saveTemplate(tmpl);
+  document.getElementById('tmpl-name').value = '';
+  renderTemplate();
+}
+
+function removeTemplate(i) {
+  const tmpl = loadTemplate();
+  tmpl.splice(i, 1);
+  saveTemplate(tmpl);
+  renderTemplate();
+}
+
+function applyTemplate() {
+  const tmpl = loadTemplate();
+  if (tmpl.length === 0) { alert('请先添加模板账户'); return; }
+  const data = loadData();
+  if (!data[currentMonth]) data[currentMonth] = [];
+
+  const existingKeys = new Set(data[currentMonth].map(a => a.type + ':' + a.name));
+
+  tmpl.forEach(t => {
+    if (!existingKeys.has(t.type + ':' + t.name)) {
+      data[currentMonth].push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+        type: t.type, name: t.name, amount: 0, rate: 0
+      });
+    }
+  });
+  saveData(data);
+  renderRecord();
+}
+
+// ===== Data Management =====
+function exportData() {
+  const data = loadData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '财务数据_' + getTodayMonth() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (confirm('导入将覆盖当前所有数据，确认继续？')) {
+        saveData(data);
+        renderRecord();
+        alert('导入成功！');
+      }
+    } catch(err) {
+      alert('文件格式错误：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearAll() {
+  if (confirm('⚠️ 确定要清空所有财务数据吗？此操作不可撤销！')) {
+    if (confirm('再次确认：清空所有月度记录？')) {
+      localStorage.removeItem(STORAGE_KEY);
+      renderRecord();
+      alert('已清空所有数据');
+    }
+  }
+}
+
+// ===== Init =====
+checkDomainChange();
+if (!STATIC_MODE) startAutoBackup();
+currentMonth = getTodayMonth();
+
+// 静态版：隐藏服务端同步/恢复按钮，提示用导出/导入备份
+if (STATIC_MODE) {
+  ['sync-btn','restore-btn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display='none'; });
+  const si = document.getElementById('sync-indicator');
+  if (si) si.innerHTML = '💾 <span style="color:#64748b;font-size:12px">静态版 · 数据保存在本机浏览器，请用「导出数据」备份</span>';
+}
+
+// Restore from server if empty on load (仅非静态版)
+const localData = loadData();
+if (!STATIC_MODE && Object.keys(localData).length === 0) {
+  fetch('/api/finance/data')
+    .then(r => r.json())
+    .then(res => {
+      if (res.ok && res.data && Object.keys(res.data).length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+        renderRecord();
+        showToast('🔄 已从服务器恢复备份数据！', 'success');
+      }
+    })
+    .catch(() => {});
+}
+
+// Show sync indicator on init
+setTimeout(() => {
+  updateSyncIndicator(true);
+}, 500);
+
+renderRecord();
+
+setTimeout(() => {
+  renderCharts();
+  renderTrend();
+  renderTemplate();
+}, 200);
+</script>
+</body>
+</html>
